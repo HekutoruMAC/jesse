@@ -1243,10 +1243,10 @@ class Strategy(ABC):
             return
 
         self._is_executing = True
-        
+
         # Cache the current price at the start of execution
         self._cached_price = self.close
-        
+
         self.before()
         self._check()
         self.after()
@@ -1256,6 +1256,46 @@ class Strategy(ABC):
         self._cached_price = None
         self._is_executing = False
         self.index += 1
+
+    def _execute_for_signal_test(self) -> tuple:
+        """
+        Signal-only execution used by rule_significance_test().
+
+        Mirrors _execute() exactly in setup (before(), after(), index increment,
+        cache management) so the strategy state evolves naturally, but never
+        submits any orders. This means the strategy is always in a "no position"
+        state throughout the run, which is exactly what we want: we are testing
+        the raw entry signal, not the position-management logic.
+
+        Returns:
+            (signal, close_price) where signal is:
+                +1  if should_long() returns True
+                -1  if should_short() returns True
+                 0  if both return False
+        """
+        if self._is_executing:
+            return 0, self.close
+
+        self._is_executing = True
+        self._cached_price = self.close
+        close_price = self.close
+
+        try:
+            self.before()
+            should_long = self.should_long()
+            should_short = self.should_short()
+            self.after()
+        finally:
+            self._clear_cached_methods()
+            self._cached_price = None
+            self._is_executing = False
+            self.index += 1
+
+        if should_long:
+            return 1, close_price
+        elif should_short:
+            return -1, close_price
+        return 0, close_price
 
     def _terminate(self) -> None:
         """
