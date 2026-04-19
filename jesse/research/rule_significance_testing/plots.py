@@ -10,7 +10,56 @@ matplotlib.use('Agg')   # non-interactive backend — safe in scripts and notebo
 from matplotlib import pyplot as plt
 
 
-def plot_significance_test(result: dict, charts_folder: str = None) -> None:
+# ---------------------------------------------------------------------------
+# Theme colour palettes
+# ---------------------------------------------------------------------------
+
+_THEMES = {
+    'light': {
+        'fig_facecolor':  'white',
+        'axes_facecolor': '#f8f8f8',
+        'text_color':     'black',
+        'title_color':    'black',
+        'grid_color':     '#cccccc',
+        'hist_color':     'steelblue',
+        'hist_edge':      'white',
+        'reject_color':   'tomato',
+        'vline_color':    'darkred',
+        'box_facecolor':  'lightyellow',
+        'box_alpha':      0.8,
+        'box_text_color': 'black',
+        'legend_facecolor': 'white',
+        'legend_edgecolor': '#cccccc',
+        'tick_color':     'black',
+        'spine_color':    '#cccccc',
+    },
+    'dark': {
+        'fig_facecolor':  '#333333',   # Dashboard backdrop-dark
+        'axes_facecolor': '#2a2a2a',   # Slightly darker than backdrop
+        'text_color':     '#e5e7eb',
+        'title_color':    '#f6f7ee',   # Dashboard body-dark
+        'grid_color':     '#4a4a4a',
+        'hist_color':     '#3b82f6',   # blue-500
+        'hist_edge':      '#333333',
+        'reject_color':   '#ef4444',   # red-500
+        'vline_color':    '#fca5a5',   # red-300
+        'box_facecolor':  '#444444',
+        'box_alpha':      0.9,
+        'box_text_color': '#e5e7eb',
+        'legend_facecolor': '#333333',
+        'legend_edgecolor': '#4a4a4a',
+        'tick_color':     '#e5e7eb',
+        'spine_color':    '#4a4a4a',
+    },
+}
+
+
+def plot_significance_test(
+    result: dict,
+    charts_folder: str = None,
+    theme: str = 'light',
+    dpi: int = 150,
+) -> str:
     """
     Visualise the sampling distribution produced by rule_significance_test().
 
@@ -23,64 +72,93 @@ def plot_significance_test(result: dict, charts_folder: str = None) -> None:
     ----------
     result        : dict returned by rule_significance_test()
     charts_folder : directory to save the PNG; defaults to ./charts/
+    theme         : 'light' (default) or 'dark' — controls matplotlib colours
+    dpi           : image resolution (default 150)
+
+    Returns
+    -------
+    str : absolute path to the saved PNG file
     """
+    c = _THEMES.get(theme, _THEMES['light'])
+
     sim_means = result['simulated_means']
     observed_mean = result['observed_mean']
     p_value = result['p_value']
-
     annualized = result['annualized_return']
     n_obs = result['n_observations']
     n_sim = result['n_simulations']
 
     fig, ax = plt.subplots(figsize=(10, 5))
+    fig.patch.set_facecolor(c['fig_facecolor'])
+    ax.set_facecolor(c['axes_facecolor'])
 
     # ---- Histogram of simulated means ----
     n_bins = min(50, max(20, n_sim // 10))
     counts, bin_edges, patches = ax.hist(
         sim_means, bins=n_bins,
-        color='steelblue', edgecolor='white', linewidth=0.4, alpha=0.85,
+        color=c['hist_color'], edgecolor=c['hist_edge'], linewidth=0.4, alpha=0.85,
         label='Simulated means (H₀)',
     )
 
-    # ---- Shade the region that equals or exceeds the observed mean ----
-    # This shaded area IS the p-value visually.
+    # ---- Shade the rejection region (p-value area) ----
     for patch, left_edge in zip(patches, bin_edges[:-1]):
         if left_edge >= observed_mean:
-            patch.set_facecolor('tomato')
+            patch.set_facecolor(c['reject_color'])
             patch.set_alpha(0.9)
 
-    # ---- Vertical line at the observed mean ----
+    # ---- Vertical line at observed mean ----
     ax.axvline(
-        observed_mean, color='darkred', linewidth=1.8, linestyle='--',
+        observed_mean, color=c['vline_color'], linewidth=1.8, linestyle='--',
         label=f'Observed mean = {observed_mean:.6f}',
     )
 
-    # ---- Annotations ----
-    method_label = "Bootstrap Significance Test"
-    significance = ''
-    if p_value < 0.01:
-        significance = '  ★★  highly significant (p < 0.01)'
-    elif p_value < 0.05:
-        significance = '  ★  significant (p < 0.05)'
+    # ---- Significance label ----
+    if p_value <= 0.001:
+        significance = '  ★★★  highly significant (p ≤ 0.001)'
+    elif p_value <= 0.01:
+        significance = '  ★★  very significant (p ≤ 0.01)'
+    elif p_value <= 0.05:
+        significance = '  ★  statistically significant (p ≤ 0.05)'
+    elif p_value <= 0.10:
+        significance = '  ~  possibly significant (p ≤ 0.10)'
     else:
-        significance = '  not significant (p ≥ 0.05)'
+        significance = '  ✕  not significant (p > 0.10)'
 
     info_text = (
         f'p-value = {p_value:.4f}{significance}\n'
         f'Annualised return = {annualized * 100:.4f} %\n'
         f'Observations = {n_obs} bars   |   Simulations = {n_sim}'
     )
+    bbox_props = dict(
+        boxstyle='round,pad=0.4',
+        facecolor=c['box_facecolor'],
+        alpha=c['box_alpha'],
+        edgecolor=c['spine_color'],
+    )
     ax.text(
         0.02, 0.97, info_text,
         transform=ax.transAxes, verticalalignment='top',
         fontsize=9, family='monospace',
-        bbox=dict(boxstyle='round,pad=0.4', facecolor='lightyellow', alpha=0.8),
+        color=c['box_text_color'],
+        bbox=bbox_props,
     )
 
-    ax.set_title('Rule Significance Test — Bootstrap', fontsize=12, fontweight='bold')
-    ax.set_xlabel('Mean bar-level log return')
-    ax.set_ylabel('Frequency')
-    ax.legend(fontsize=9)
+    # ---- Styling ----
+    ax.set_title(
+        'Rule Significance Test — Bootstrap',
+        fontsize=12, fontweight='bold', color=c['title_color']
+    )
+    ax.set_xlabel('Mean bar-level log return', color=c['text_color'])
+    ax.set_ylabel('Frequency', color=c['text_color'])
+    ax.tick_params(colors=c['tick_color'])
+    for spine in ax.spines.values():
+        spine.set_edgecolor(c['spine_color'])
+    ax.grid(True, color=c['grid_color'], linewidth=0.5, alpha=0.5)
+
+    legend = ax.legend(fontsize=9, facecolor=c['legend_facecolor'], edgecolor=c['legend_edgecolor'])
+    for text in legend.get_texts():
+        text.set_color(c['text_color'])
+
     plt.tight_layout()
 
     # ---- Save ----
@@ -90,6 +168,7 @@ def plot_significance_test(result: dict, charts_folder: str = None) -> None:
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f'rule_significance_bootstrap_{timestamp}.png'
     path = os.path.join(charts_folder, filename)
-    plt.savefig(path, dpi=150, bbox_inches='tight')
+    plt.savefig(path, dpi=dpi, bbox_inches='tight', facecolor=c['fig_facecolor'])
     plt.close(fig)
     print(f'Saved significance test chart to: {path}')
+    return path

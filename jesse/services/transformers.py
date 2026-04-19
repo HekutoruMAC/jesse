@@ -3,6 +3,7 @@ from jesse.models.NotificationApiKeys import NotificationApiKeys
 from jesse.models.OptimizationSession import OptimizationSession
 from jesse.models.BacktestSession import BacktestSession
 from jesse.models.MonteCarloSession import MonteCarloSession
+from jesse.models.SignificanceTestSession import SignificanceTestSession
 from jesse.models.LiveSession import LiveSession
 from jesse.models.Order import Order
 from jesse.enums import live_session_statuses
@@ -495,3 +496,56 @@ def get_order_details(order) -> dict:
     }
     
     return jh.clean_nan_values(jh.clean_infinite_values(result))
+
+
+def get_significance_test_session(session) -> dict:
+    """Transform a SignificanceTestSession for API list response (minimal data)."""
+    results_summary = None
+    if session.results:
+        try:
+            raw = json.loads(session.results)
+            results_summary = {
+                'p_value': raw.get('p_value'),
+                'annualized_return': raw.get('annualized_return'),
+                'observed_mean': raw.get('observed_mean'),
+                'n_simulations': raw.get('n_simulations'),
+                'n_observations': raw.get('n_observations'),
+            }
+        except Exception:
+            pass
+    return {
+        'id': str(session.id),
+        'status': session.status,
+        'has_results': bool(session.results),
+        'results': results_summary,
+        'created_at': session.created_at,
+        'updated_at': session.updated_at,
+        'title': session.title,
+        'description': session.description,
+        'strategy_codes': json.loads(session.strategy_codes) if session.strategy_codes else {},
+        'state': session.state_json,
+    }
+
+
+def get_significance_test_session_for_load_more(session) -> dict:
+    """Transform a SignificanceTestSession for the detailed session view."""
+    results_data = None
+    if session.results:
+        results_data = json.loads(session.results)
+
+    return {
+        'id': str(session.id),
+        'status': session.status,
+        'has_results': bool(session.results),
+        'results': results_data,
+        'chart_path': session.chart_path,
+        'exception': session.exception,
+        'traceback': session.traceback,
+        'theme': session.theme,
+        'created_at': session.created_at,
+        'updated_at': session.updated_at,
+        'title': session.title,
+        'description': session.description,
+        'strategy_codes': json.loads(session.strategy_codes) if session.strategy_codes else {},
+        'state': session.state_json,
+    }

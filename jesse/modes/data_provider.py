@@ -370,3 +370,4 @@ def download_backtest_log(session_id: str):
         filename=filename,
         media_type='text/plain'
     )
+

@@ -50,6 +50,7 @@ def rule_significance_test(
     random_seed: Optional[int] = None,
     progress_bar: bool = False,
     cpu_cores: Optional[int] = None,
+    progress_callback=None,
 ) -> dict:
     """
     Test whether a trading rule has genuine predictive power using
@@ -199,6 +200,7 @@ def rule_significance_test(
             cpu_cores=resolved_cores,
             random_seed=resolved_seed,
             pbar=pbar,
+            progress_callback=progress_callback,
         )
     finally:
         if pbar is not None:
