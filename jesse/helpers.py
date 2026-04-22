@@ -443,6 +443,11 @@ def is_backtesting() -> bool:
     return config['app']['trading_mode'] == 'backtest'
 
 
+def is_significance_testing() -> bool:
+    from jesse.config import config
+    return config['app']['trading_mode'] == 'significance_test'
+
+
 def is_debuggable(debug_item) -> bool:
     from jesse.config import config
     try:
