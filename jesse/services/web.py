@@ -345,7 +345,6 @@ class SignificanceTestRequestJson(BaseModel):
     n_simulations: int = 1000
     random_seed: Optional[int] = None
     theme: str = 'light'
-    cpu_cores: int = 6
     state: dict = {}
 
 

@@ -2,7 +2,6 @@ import os
 import time
 import traceback
 from datetime import timedelta
-from multiprocessing import cpu_count
 from typing import Dict, List, Optional
 
 import jesse.helpers as jh
@@ -28,7 +27,7 @@ class SignificanceTestRunner:
         n_simulations: int,
         random_seed: Optional[int],
         theme: str,
-        cpu_cores: int,
+        **kwargs,
     ):
         self.session_id = session_id
         self.user_config = user_config
@@ -39,9 +38,6 @@ class SignificanceTestRunner:
         self.n_simulations = n_simulations
         self.random_seed = random_seed if random_seed is not None else 42
         self.theme = theme
-
-        available = cpu_count()
-        self.cpu_cores = cpu_cores if cpu_cores <= available else available
 
         self.start_time = jh.now_to_timestamp()
 
@@ -61,7 +57,7 @@ class SignificanceTestRunner:
         self.tl.start()
 
     def run(self) -> None:
-        jh.debug(f"Rule Significance Test started: {self.n_simulations} simulations, {self.cpu_cores} CPU cores")
+        jh.debug(f"Rule Significance Test started: {self.n_simulations} simulations")
 
         try:
             self._publish_general_info()
@@ -96,7 +92,6 @@ class SignificanceTestRunner:
         sync_publish('general_info', {
             'started_at': jh.timestamp_to_arrow(self.start_time).humanize(),
             'n_simulations': self.n_simulations,
-            'cpu_cores': self.cpu_cores,
         })
 
     def _run_significance_test(self):
@@ -156,7 +151,6 @@ class SignificanceTestRunner:
             n_simulations=self.n_simulations,
             random_seed=self.random_seed,
             progress_bar=False,
-            cpu_cores=self.cpu_cores,
             progress_callback=progress_callback,
         )
 

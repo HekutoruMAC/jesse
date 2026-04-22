@@ -79,7 +79,6 @@ async def significance_test(
         request_json.n_simulations,
         request_json.random_seed,
         request_json.theme,
-        request_json.cpu_cores,
         request_json.state,
     )
 

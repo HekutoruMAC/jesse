@@ -25,7 +25,6 @@ def run(
     n_simulations: int,
     random_seed: Optional[int],
     theme: str,
-    cpu_cores: int,
     state: dict,
 ) -> None:
     from jesse.config import config, set_config
@@ -34,13 +33,7 @@ def run(
     if len(routes) != 1:
         raise ValueError('Rule Significance Test requires exactly one trading route.')
 
-    if cpu_cores < 1:
-        raise ValueError('cpu_cores must be an integer value greater than 0.')
-
-    max_cpu_cores = cpu_count()
-    if cpu_cores > max_cpu_cores:
-        raise ValueError(f'cpu_cores must be <= {max_cpu_cores} (available cores on this machine).')
-
+    # Load candles
     set_config(user_config)
 
     for r in routes:
@@ -86,6 +79,6 @@ def run(
         n_simulations=n_simulations,
         random_seed=random_seed,
         theme=theme,
-        cpu_cores=cpu_cores,
+        cpu_cores=1,
     )
     runner.run()
