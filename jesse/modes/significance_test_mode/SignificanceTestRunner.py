@@ -5,8 +5,6 @@ from datetime import timedelta
 from multiprocessing import cpu_count
 from typing import Dict, List, Optional
 
-import ray
-
 import jesse.helpers as jh
 from jesse import exceptions
 from jesse.services.redis import sync_publish, is_process_active
@@ -46,19 +44,6 @@ class SignificanceTestRunner:
         self.cpu_cores = cpu_cores if cpu_cores <= available else available
 
         self.start_time = jh.now_to_timestamp()
-
-        # Initialize Ray
-        self.ray_started_here = False
-        if not ray.is_initialized():
-            try:
-                ray.init(num_cpus=self.cpu_cores, ignore_reinit_error=True)
-                jh.debug(f"Rule Significance Test: Ray initialized with {self.cpu_cores} CPU cores")
-                self.ray_started_here = True
-            except Exception as e:
-                jh.debug(f"Rule Significance Test: Error initializing Ray: {e}. Falling back to 1 CPU.")
-                self.cpu_cores = 1
-                ray.init(num_cpus=1, ignore_reinit_error=True)
-                self.ray_started_here = True
 
         # Periodic termination check
         client_id = jh.get_session_id()
@@ -102,8 +87,6 @@ class SignificanceTestRunner:
             raise
 
         finally:
-            if self.ray_started_here and ray.is_initialized():
-                ray.shutdown()
             try:
                 self.tl.stop()
             except Exception:
@@ -134,17 +117,17 @@ class SignificanceTestRunner:
         last_update_time = None
         throttle_interval = 0.5
 
-        def progress_callback(batch_index: int, total_batches: int):
+        def progress_callback(current_progress: int, total_progress: int):
             nonlocal last_update_time
             current_time = time.time()
             should_publish = (
                 last_update_time is None
                 or (current_time - last_update_time) >= throttle_interval
-                or batch_index == total_batches
+                or current_progress == total_progress
             )
             if should_publish:
                 elapsed = jh.now_to_timestamp() - self.start_time
-                completed_sims = int((batch_index / total_batches) * self.n_simulations) if total_batches > 0 else 0
+                completed_sims = int((current_progress / total_progress) * self.n_simulations) if total_progress > 0 else 0
                 if completed_sims > 0:
                     avg = elapsed / completed_sims
                     estimated_remaining = int(avg * (self.n_simulations - completed_sims))

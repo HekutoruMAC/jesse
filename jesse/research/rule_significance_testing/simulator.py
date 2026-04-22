@@ -41,6 +41,7 @@ def run_signal_only_backtest(
     candles: dict,
     warmup_candles: Optional[dict] = None,
     hyperparameters: Optional[dict] = None,
+    progress_callback=None,
 ) -> tuple:
     """
     Run the Jesse candle engine without executing any orders and collect the
@@ -123,6 +124,9 @@ def run_signal_only_backtest(
     signals: List[int] = []
 
     for i in range(length):
+        if progress_callback:
+            progress_callback(i + 1, length)
+
         # Advance the global clock (same as the normal simulator)
         store.app.time = first_candles_set[i][0] + 60_000
 

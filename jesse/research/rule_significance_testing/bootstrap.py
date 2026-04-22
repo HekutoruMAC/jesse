@@ -14,32 +14,6 @@ Steps
 """
 
 import numpy as np
-import ray
-
-
-# ---------------------------------------------------------------------------
-# Ray remote worker
-# ---------------------------------------------------------------------------
-
-@ray.remote
-def _ray_bootstrap_batch(
-    centered: np.ndarray,
-    batch_size: int,
-    seed: int,
-) -> np.ndarray:
-    """
-    Run one batch of bootstrap simulations and return an array of simulated means.
-
-    Parameters
-    ----------
-    centered   : zero-centred rule returns (enforces H0)
-    batch_size : number of simulations in this batch
-    seed       : per-batch random seed for reproducibility
-    """
-    rng = np.random.default_rng(seed)
-    n = len(centered)
-    idx = rng.integers(0, n, size=(batch_size, n))
-    return centered[idx].mean(axis=1)
 
 
 def run_bootstrap_test(
@@ -52,7 +26,7 @@ def run_bootstrap_test(
     progress_callback=None,
 ) -> np.ndarray:
     """
-    Distribute bootstrap simulations across Ray workers and return the full
+    Run bootstrap simulations synchronously and return the full
     array of simulated means.
 
     Parameters
@@ -61,34 +35,18 @@ def run_bootstrap_test(
         Called each time a batch completes. batch_index is 1-based.
     """
     centered = rule_returns - observed_mean
-    batch_sizes = _split_into_batches(n_simulations, cpu_cores)
+    
+    # We split into batches equal to the `cpu_cores` parameter to maintain 
+    # compatibility with the progress bar initialized in rule_significance.py
+    # which expects exactly `cpu_cores` updates.
+    batch_sizes = _split_into_batches(n_simulations, max(1, cpu_cores))
     total_batches = len(batch_sizes)
 
-    refs = [
-        _ray_bootstrap_batch.remote(centered, batch_size, random_seed + i)
-        for i, batch_size in enumerate(batch_sizes)
-    ]
-
-    return _collect_results(refs, pbar, progress_callback, total_batches)
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _split_into_batches(n: int, k: int) -> list:
-    """Divide n simulations into k roughly equal integer batches."""
-    base, extra = divmod(n, k)
-    return [base + (1 if i < extra else 0) for i in range(k)]
-
-
-def _collect_results(refs: list, pbar, progress_callback, total_batches: int) -> np.ndarray:
     parts = []
-    remaining = list(refs)
     completed = 0
-    while remaining:
-        done, remaining = ray.wait(remaining, num_returns=1, timeout=0.5)
-        for ref in done:
-            parts.append(ray.get(ref))
+    
+    for i, batch_size in enumerate(batch_sizes):
+        if batch_size == 0:
             completed += 1
             if pbar is not None:
                 pbar.update(1)
@@ -97,4 +55,29 @@ def _collect_results(refs: list, pbar, progress_callback, total_batches: int) ->
                     progress_callback(completed, total_batches)
                 except Exception:
                     pass
-    return np.concatenate(parts)
+            continue
+            
+        rng = np.random.default_rng(random_seed + i)
+        n = len(centered)
+        
+        # Resample and compute means for this batch
+        idx = rng.integers(0, n, size=(batch_size, n))
+        batch_means = centered[idx].mean(axis=1)
+        parts.append(batch_means)
+        
+        completed += 1
+        if pbar is not None:
+            pbar.update(1)
+        if progress_callback is not None:
+            try:
+                progress_callback(completed, total_batches)
+            except Exception:
+                pass
+
+    return np.concatenate(parts) if parts else np.array([])
+
+
+def _split_into_batches(n: int, k: int) -> list:
+    """Divide n simulations into k roughly equal integer batches."""
+    base, extra = divmod(n, k)
+    return [base + (1 if i < extra else 0) for i in range(k)]

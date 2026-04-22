@@ -4,7 +4,7 @@ Shared constants and small utilities for the rule-significance-testing package.
 from multiprocessing import cpu_count
 
 # ---------------------------------------------------------------------------
-# Ray / multiprocessing
+# Multiprocessing
 # ---------------------------------------------------------------------------
 DEFAULT_CPU_USAGE_RATIO = 0.8   # fraction of available CPU cores used by default
 MIN_CPU_CORES = 1                # never spawn fewer than 1 worker

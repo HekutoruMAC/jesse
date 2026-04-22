@@ -16,18 +16,16 @@ The function runs in two phases:
       should_long() / should_short() methods are called to record the raw
       entry signal (+1 / -1 / 0).
 
-  Phase 2 – Bootstrap simulation (parallel via Ray)
+  Phase 2 – Bootstrap simulation
       Resample the rule's zero-centred returns with replacement N times
       and build a null sampling distribution.
       p-value = fraction of simulated means ≥ the observed mean.
-      Simulations are distributed across Ray workers in batches.
 """
 
 import warnings
 from typing import Dict, List, Optional
 
 import numpy as np
-import ray
 
 from .common import (
     TRADING_DAYS_PER_YEAR,
@@ -46,7 +44,7 @@ def rule_significance_test(
     candles: dict,
     warmup_candles: Optional[dict] = None,
     hyperparameters: Optional[dict] = None,
-    n_simulations: int = 200,
+    n_simulations: int = 2000,
     random_seed: Optional[int] = None,
     progress_bar: bool = False,
     cpu_cores: Optional[int] = None,
@@ -83,14 +81,14 @@ def rule_significance_test(
     hyperparameters : dict, optional
         Hyperparameters forwarded to the strategy.
     n_simulations : int
-        Number of bootstrap resamples (default 200; 1000+ recommended).
+        Number of bootstrap resamples (default 2000; 2000+ recommended).
     random_seed : int, optional
-        Base random seed for reproducibility.  Each Ray worker batch
+        Base random seed for reproducibility.  Each batch
         receives seed + batch_index.
     progress_bar : bool
         Show a tqdm progress bar over the simulation batches.
     cpu_cores : int, optional
-        Number of Ray worker processes.  Defaults to 80 % of available cores.
+        Number of logical batches to split the simulations into for progress reporting. Defaults to 80 % of available cores.
 
     Returns
     -------
@@ -117,6 +115,12 @@ def rule_significance_test(
     # ------------------------------------------------------------------
     # Phase 1: Signal collection (sequential, single run)
     # ------------------------------------------------------------------
+    def phase1_callback(current, total):
+        if progress_callback:
+            # Phase 1 (signal extraction) takes the bulk of the time. Map to 0-90% of progress.
+            mapped_current = int((current / total) * 90)
+            progress_callback(mapped_current, 100)
+
     bar_timestamps, close_prices, signals = run_signal_only_backtest(
         config=config,
         routes=routes,
@@ -124,6 +128,7 @@ def rule_significance_test(
         candles=candles,
         warmup_candles=warmup_candles,
         hyperparameters=hyperparameters,
+        progress_callback=phase1_callback,
     )
 
     # ------------------------------------------------------------------
@@ -176,19 +181,18 @@ def rule_significance_test(
     observed_mean = float(rule_returns.mean())
 
     # ------------------------------------------------------------------
-    # Phase 2: Bootstrap simulations (parallel via Ray)
+    # Phase 2: Bootstrap simulations
     # ------------------------------------------------------------------
-    ray_started_here = False
-    if not ray.is_initialized():
-        try:
-            ray.init(num_cpus=resolved_cores, ignore_reinit_error=True)
-            print(
-                f'Starting rule significance test (bootstrap) with '
-                f'{resolved_cores} CPU cores, {n_simulations} simulations...'
-            )
-            ray_started_here = True
-        except Exception as exc:
-            raise RuntimeError(f'Failed to initialise Ray: {exc}') from exc
+    def phase2_callback(current, total):
+        if progress_callback:
+            # Phase 2 (bootstrap simulations) maps to the final 10%
+            mapped_current = 90 + int((current / total) * 10)
+            progress_callback(mapped_current, 100)
+
+    print(
+        f'Starting rule significance test (bootstrap) with '
+        f'{n_simulations} simulations...'
+    )
 
     pbar = _setup_progress_bar(progress_bar, resolved_cores, 'Simulations (bootstrap)')
 
@@ -200,13 +204,11 @@ def rule_significance_test(
             cpu_cores=resolved_cores,
             random_seed=resolved_seed,
             pbar=pbar,
-            progress_callback=progress_callback,
+            progress_callback=phase2_callback,
         )
     finally:
         if pbar is not None:
             pbar.close()
-        if ray_started_here and ray.is_initialized():
-            ray.shutdown()
 
     # p-value: fraction of simulated means that equalled or exceeded the
     # observed mean under the null hypothesis.
