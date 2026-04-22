@@ -63,8 +63,12 @@ class SignificanceTestRunner:
             self._publish_general_info()
             self._run_significance_test()
             update_significance_test_session_status(self.session_id, 'finished')
+            
+            finish_time = jh.now_to_timestamp()
+            execution_duration = round((finish_time - self.start_time) / 1000, 2)
+            
             sync_publish('alert', {
-                'message': 'Rule Significance Test completed successfully!',
+                'message': f"Successfully executed rule significance test in: {execution_duration} seconds",
                 'type': 'success'
             })
 
