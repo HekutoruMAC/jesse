@@ -14,3 +14,6 @@ from .BacktestSession import BacktestSession
 from .OpenTab import OpenTab
 from .LiveEquitySnapshot import LiveEquitySnapshot
 from .SignificanceTestSession import SignificanceTestSession
+from .OptimizationSession import OptimizationSession
+from .LiveSession import LiveSession
+from .MonteCarloSession import MonteCarloSession
