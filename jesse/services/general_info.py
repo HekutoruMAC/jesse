@@ -16,15 +16,19 @@ def get_general_info(has_live=False) -> dict:
     from jesse.services.auth import get_access_token
     access_token = get_access_token()
 
+    plugin_installed = False
     if has_live:
-        if not access_token:
-            has_live = False
-
-        # version info
+        # Detect plugin installation independently of auth status
         try:
             from jesse_live.version import __version__ as live_version
-            system_info['live_plugin_version'] = live_version
+            plugin_installed = True
+            if access_token:
+                system_info['live_plugin_version'] = live_version
         except ImportError:
+            plugin_installed = False
+
+        # has_live controls whether live-specific logic runs (requires auth)
+        if not access_token:
             has_live = False
 
     if access_token:
@@ -108,7 +112,7 @@ def get_general_info(has_live=False) -> dict:
         'exchanges': exchange_info,
         'strategies': strategies,
         'jesse_supported_timeframes': jesse_supported_timeframes,
-        'has_live_plugin_installed': has_live,
+        'has_live_plugin_installed': plugin_installed,
         'system_info': system_info,
         'update_info': update_info,
         'plan': plan_info['plan'],
