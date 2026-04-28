@@ -1,3 +1,4 @@
+import os
 import time
 import re
 from typing import Dict, List, Tuple, Optional
@@ -43,7 +44,8 @@ def run(
         csv: bool = False,
         json: bool = False,
         fast_mode: bool = False,
-        benchmark: bool = False
+        benchmark: bool = False,
+        theme: str = 'light'
 ) -> None:
     if not jh.is_unit_testing():
         # at every second, we check to see if it's time to execute stuff
@@ -66,7 +68,7 @@ def run(
 
     _execute_backtest(
         client_id, debug_mode, user_config, exchange, routes, data_routes, start_date, finish_date, candles, chart,
-        tradingview, csv, json, fast_mode, benchmark
+        tradingview, csv, json, fast_mode, benchmark, theme
     )
 
 
@@ -85,7 +87,8 @@ def _execute_backtest(
         csv: bool = False,
         json: bool = False,
         fast_mode: bool = False,
-        benchmark: bool = False
+        benchmark: bool = False,
+        theme: str = 'light'
 ):
     """
     Executes the backtest that has been initiated from within the dashboard. The purpose of extracting these
@@ -161,7 +164,6 @@ def _execute_backtest(
             generate_tradingview=tradingview,
             generate_csv=csv,
             generate_json=json,
-            generate_equity_curve=True,
             benchmark=benchmark,
             generate_hyperparameters=True,
             fast_mode=fast_mode,
@@ -188,7 +190,7 @@ def _execute_backtest(
             # retry the backtest simulation
             _execute_backtest(
                 client_id, debug_mode, user_config, exchange, routes, data_routes, start_date, finish_date, candles,
-                chart, tradingview, csv, json, fast_mode, benchmark
+                chart, tradingview, csv, json, fast_mode, benchmark, theme
             )
             return
         else:
@@ -209,8 +211,20 @@ def _execute_backtest(
         })
         sync_publish('hyperparameters', result['hyperparameters'])
         sync_publish('metrics', result['metrics'])
-        sync_publish('equity_curve', result['equity_curve'], compression=True)
         sync_publish('trades', result['trades'], compression=True)
+
+        # Generate six analytical chart images (equity_curve, drawdown, underwater,
+        # monthly_heatmap, monthly_distribution, trade_pnl).
+        # Must be called BEFORE store.reset() since it reads from the live store.
+        _charts_folder = os.path.abspath('storage/backtest-charts')
+        charts._plot_backtest_charts(
+            session_id=client_id,
+            charts_folder=_charts_folder,
+            theme=theme,
+            benchmark=benchmark,
+        )
+        # Notify the frontend that all six images are ready.
+        sync_publish('charts_image_ready', {'session_id': client_id})
         
         # Prepare chart data if requested (call formatting functions once and cache)
         chart_data = None
@@ -227,7 +241,6 @@ def _execute_backtest(
         
         # Capture strategy codes for each route
         strategy_codes = {}
-        import os
         for r in router.routes:
             key = f"{r.exchange}-{r.symbol}"
             if key not in strategy_codes:
@@ -246,7 +259,6 @@ def _execute_backtest(
         update_backtest_session_results(
             id=client_id,
             metrics=result.get('metrics'),
-            equity_curve=result.get('equity_curve'),
             trades=result.get('trades'),
             hyperparameters=result.get('hyperparameters'),
             chart_data=chart_data,

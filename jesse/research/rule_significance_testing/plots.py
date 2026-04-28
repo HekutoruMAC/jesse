@@ -59,6 +59,7 @@ def plot_significance_test(
     charts_folder: str = None,
     theme: str = 'light',
     dpi: int = 150,
+    show_title: bool = True,
 ) -> str:
     """
     Visualise the sampling distribution produced by rule_significance_test().
@@ -144,10 +145,11 @@ def plot_significance_test(
     )
 
     # ---- Styling ----
-    ax.set_title(
-        'Rule Significance Test — Bootstrap',
-        fontsize=12, fontweight='bold', color=c['title_color']
-    )
+    if show_title:
+        ax.set_title(
+            'Rule Significance Test — Bootstrap',
+            fontsize=12, fontweight='bold', color=c['title_color']
+        )
     ax.set_xlabel('Mean bar-level log return', color=c['text_color'])
     ax.set_ylabel('Frequency', color=c['text_color'])
     ax.tick_params(colors=c['tick_color'])

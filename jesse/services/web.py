@@ -35,6 +35,7 @@ class BacktestRequestJson(BaseModel):
     export_tradingview: bool
     fast_mode: bool
     benchmark: bool
+    theme: str = 'light'
 
 
 class OptimizationRequestJson(BaseModel):

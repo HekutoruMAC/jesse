@@ -151,10 +151,6 @@ class Optimizer:
             load_if_exists=True
         )
 
-        # Buffer to accumulate objective curve data points (one point per trial)
-        self.objective_curve_buffer = []
-        self.total_objective_curve_buffer = []
-
         # Initialize Ray if not already
         if not ray.is_initialized():
             try:
@@ -214,13 +210,11 @@ class Optimizer:
             # Set trial counter to start from after the last trial
             self.trial_counter = completed_trials
 
-            self.total_objective_curve_buffer = json.loads(session_data.objective_curve.replace('-Infinity', 'null').replace('Infinity', 'null'))
             # Update the database with loaded trials
             update_optimization_session_trials(
                 self.session_id,
                 self.completed_trials,
                 self.best_trials,
-                self.total_objective_curve_buffer,
                 self.n_trials
             )
 
@@ -357,9 +351,6 @@ class Optimizer:
             'estimated_remaining_seconds': self.progressbar.estimated_remaining_seconds
         })
 
-        # Process trial metrics for objective curve
-        self._process_trial_metrics(trial_number, training_metrics, testing_metrics)
-
         # Add to best trials if the score is valid
         if score > 0.0001:
             # Convert parameters to DNA (base64)
@@ -411,7 +402,6 @@ class Optimizer:
                     self.session_id,
                     self.completed_trials,
                     self.best_trials,
-                    self.total_objective_curve_buffer,
                     self.n_trials
                 )
 
@@ -459,37 +449,7 @@ class Optimizer:
         # Send top candidates to the dashboard
         sync_publish('best_candidates', best_candidates)
 
-    def _process_trial_metrics(self, trial_number, training_metrics, testing_metrics):
-        """Process metrics from a completed trial to update objective curve"""
-        # Only add to buffer if both metrics exist and are not empty
-        if training_metrics and testing_metrics:
-            data_point = {
-                'trial': trial_number + 1,
-                'training': training_metrics,
-                'testing': testing_metrics
-            }
-            self.objective_curve_buffer.append(data_point)
 
-            if jh.is_debugging():
-                jh.debug(f"Added trial {trial_number + 1} to objective curve buffer with metrics")
-        else:
-            if jh.is_debugging():
-                jh.debug(f"Skipped trial {trial_number + 1} - missing metrics. Training: {bool(training_metrics)}, Testing: {bool(testing_metrics)}")
-
-        # Publish a batch every 5 trials or when buffer reaches 10 items
-        buffer_size = len(self.objective_curve_buffer)
-        if buffer_size >= 10 or (buffer_size > 0 and self.completed_trials % 5 == 0):
-            if jh.is_debugging():
-                jh.debug(f"Publishing objective curve LEN: {len(self.objective_curve_buffer)}")
-            sync_publish('objective_curve', self.objective_curve_buffer)
-
-            if len(self.objective_curve_buffer) > 0 and len(self.total_objective_curve_buffer) > 0:
-                if self.objective_curve_buffer[0]['trial'] > self.total_objective_curve_buffer[-1]['trial']:
-                    self.total_objective_curve_buffer.extend(self.objective_curve_buffer)
-            else:
-                self.total_objective_curve_buffer.extend(self.objective_curve_buffer)
-
-            self.objective_curve_buffer = []
 
     def _set_progressbar_index(self, index):
         """Manually set the progressbar index for resuming sessions efficiently"""
@@ -530,7 +490,6 @@ class Optimizer:
                     update_optimization_session_trials(
                         self.session_id,
                         0,
-                        [],
                         [],
                         self.n_trials
                     )
@@ -591,12 +550,6 @@ class Optimizer:
                         jh.debug(f'Exception raised in the ray method for trial {trial_number}: {e}')
                         raise e
 
-            # Publish any remaining data in the buffer
-            if self.objective_curve_buffer:
-                jh.debug(f"Publishing remaining {len(self.objective_curve_buffer)} data points in buffer")
-                sync_publish('objective_curve', self.objective_curve_buffer)
-                self.objective_curve_buffer = []
-
             # Get the best trial from the study
             try:
                 best_trial = self.study.best_trial
@@ -610,7 +563,6 @@ class Optimizer:
                 self.session_id,
                 self.completed_trials,
                 self.best_trials,
-                self.total_objective_curve_buffer,
                 self.n_trials
             )
 

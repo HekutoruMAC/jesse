@@ -171,6 +171,7 @@ class SignificanceTestRunner:
             result=result,
             charts_folder=charts_folder,
             theme=self.theme,
+            show_title=False,
         )
 
 

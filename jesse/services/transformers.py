@@ -10,7 +10,7 @@ from jesse.enums import live_session_statuses
 from jesse.repositories import order_repository, live_session_repository
 from jesse.services.multiprocessing import process_manager
 import json
-import math
+import os
 import jesse.helpers as jh
 
 
@@ -186,7 +186,12 @@ def get_backtest_session_for_load_more(session: BacktestSession) -> dict:
     equity_curve = jh.clean_infinite_values(json.loads(session.equity_curve)) if session.equity_curve else []
     trades = jh.clean_infinite_values(json.loads(session.trades)) if session.trades else []
     hyperparameters = jh.clean_infinite_values(json.loads(session.hyperparameters)) if session.hyperparameters else None
-    
+
+    # Check if chart images exist for this session (probe the equity_curve image as sentinel)
+    charts_folder = os.path.abspath('storage/backtest-charts')
+    probe_path = os.path.join(charts_folder, f'{session.id}_equity_curve.png')
+    has_charts_image = os.path.exists(probe_path)
+
     result = {
         'id': str(session.id),
         'status': session.status,
@@ -195,6 +200,7 @@ def get_backtest_session_for_load_more(session: BacktestSession) -> dict:
         'trades': trades,
         'hyperparameters': hyperparameters,
         'has_chart_data': bool(session.chart_data),
+        'has_charts_image': has_charts_image,
         'created_at': session.created_at,
         'updated_at': session.updated_at,
         'execution_duration': session.execution_duration,
