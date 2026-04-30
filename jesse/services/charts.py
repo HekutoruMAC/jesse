@@ -1,4 +1,5 @@
 import os
+import arrow
 import numpy as np
 from scipy.stats import gaussian_kde
 from datetime import datetime, timedelta
@@ -200,11 +201,16 @@ def _plot_backtest_charts(session_id: str, charts_folder: str, theme: str = 'lig
     if benchmark:
         initial_balance = daily_balance[0]
         bench_colors = t['benchmark_colors']
+        # Clamp the finish date to the current time so that adding 24h to a recent
+        # ending_time does not produce a future timestamp, which would cause
+        # get_candles_from_db to raise InvalidDateRange and silently skip the benchmark.
+        current_ms = arrow.utcnow().int_timestamp * 1000
+        benchmark_finish = min(store.app.ending_time + 1000 * 60 * 60 * 24, current_ms)
         for i, r in enumerate(router.routes):
             try:
                 _, daily_candles = get_candles_from_db(
                     r.exchange, r.symbol, '1D', store.app.starting_time,
-                    store.app.ending_time + 1000 * 60 * 60 * 24,
+                    benchmark_finish,
                     is_for_jesse=False, warmup_candles_num=0, caching=True
                 )
                 daily_returns = prices_to_returns(daily_candles[:, 2])
@@ -215,8 +221,9 @@ def _plot_backtest_charts(session_id: str, charts_folder: str, theme: str = 'lig
                 color = bench_colors[i % len(bench_colors)]
                 bench_series.append((r.symbol, color, bench_dates, bench_balance, bench_multiplier))
                 ax.plot(bench_dates, bench_balance, color=color, linewidth=1.2, linestyle='--', label=r.symbol)
-            except Exception:
-                pass
+            except Exception as e:
+                import jesse.helpers as jh
+                jh.debug(f'Could not generate benchmark chart for {r.symbol}: {e}')
 
     ax.set_ylabel('Balance', color=t['text_color'])
     ax.set_xlabel('Date', color=t['text_color'])
@@ -547,10 +554,15 @@ def equity_curve(benchmark: bool = False) -> list:
 
     if benchmark:
         initial_balance = daily_balance[0]
+        # Clamp the finish date to the current time so that adding 24h to a recent
+        # ending_time does not produce a future timestamp, which would cause
+        # get_candles_from_db to raise InvalidDateRange.
+        current_ms = arrow.utcnow().int_timestamp * 1000
+        benchmark_finish = min(store.app.ending_time + 1000 * 60 * 60 * 24, current_ms)
         for i, r in enumerate(router.routes):
             _, daily_candles = get_candles_from_db(
                 r.exchange, r.symbol, '1D', store.app.starting_time,
-                store.app.ending_time + 1000 * 60 * 60 * 24, is_for_jesse=False, warmup_candles_num=0, caching=True
+                benchmark_finish, is_for_jesse=False, warmup_candles_num=0, caching=True
             )
             daily_returns = prices_to_returns(daily_candles[:, 2])
             daily_returns[0] = 0
