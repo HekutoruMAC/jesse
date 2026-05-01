@@ -158,6 +158,11 @@ class DeleteStrategyRequestJson(BaseModel):
     name: str
 
 
+class ForkStrategyRequestJson(BaseModel):
+    new_name: str
+    content: str
+
+
 class ImportStrategyRequestJson(BaseModel):
     slug: str
 
