@@ -1,5 +1,4 @@
 import os
-import arrow
 import numpy as np
 from scipy.stats import gaussian_kde
 from datetime import datetime, timedelta
@@ -201,11 +200,12 @@ def _plot_backtest_charts(session_id: str, charts_folder: str, theme: str = 'lig
     if benchmark:
         initial_balance = daily_balance[0]
         bench_colors = t['benchmark_colors']
-        # Clamp the finish date to the current time so that adding 24h to a recent
-        # ending_time does not produce a future timestamp, which would cause
-        # get_candles_from_db to raise InvalidDateRange and silently skip the benchmark.
-        current_ms = arrow.utcnow().int_timestamp * 1000
-        benchmark_finish = min(store.app.ending_time + 1000 * 60 * 60 * 24, current_ms)
+        # Use store.app.ending_time directly (no +24h). ending_time is just ~1 minute
+        # past the last simulated candle, so floor(ending_time) - 1 min lands exactly
+        # on the last candle timestamp that exists in the DB. Adding 24h previously
+        # caused the fetch to request a finish date one full day beyond the last DB
+        # candle, which always raised CandleNotFoundInDatabase.
+        benchmark_finish = store.app.ending_time
         for i, r in enumerate(router.routes):
             try:
                 _, daily_candles = get_candles_from_db(
@@ -223,7 +223,7 @@ def _plot_backtest_charts(session_id: str, charts_folder: str, theme: str = 'lig
                 ax.plot(bench_dates, bench_balance, color=color, linewidth=1.2, linestyle='--', label=r.symbol)
             except Exception as e:
                 import jesse.helpers as jh
-                jh.debug(f'Could not generate benchmark chart for {r.symbol}: {e}')
+                jh.error(f'Could not generate benchmark chart for {r.symbol}: {e}')
 
     ax.set_ylabel('Balance', color=t['text_color'])
     ax.set_xlabel('Date', color=t['text_color'])
@@ -554,11 +554,8 @@ def equity_curve(benchmark: bool = False) -> list:
 
     if benchmark:
         initial_balance = daily_balance[0]
-        # Clamp the finish date to the current time so that adding 24h to a recent
-        # ending_time does not produce a future timestamp, which would cause
-        # get_candles_from_db to raise InvalidDateRange.
-        current_ms = arrow.utcnow().int_timestamp * 1000
-        benchmark_finish = min(store.app.ending_time + 1000 * 60 * 60 * 24, current_ms)
+        # Use store.app.ending_time directly — same reasoning as _plot_backtest_charts above.
+        benchmark_finish = store.app.ending_time
         for i, r in enumerate(router.routes):
             _, daily_candles = get_candles_from_db(
                 r.exchange, r.symbol, '1D', store.app.starting_time,
