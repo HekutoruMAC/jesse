@@ -367,7 +367,12 @@ def _plot_backtest_charts(session_id: str, charts_folder: str, theme: str = 'lig
         ax.set_facecolor(t['axes_facecolor'])
 
         masked = np.ma.masked_invalid(grid)
-        abs_max = max(10, float(np.nanmax(np.abs(grid[~np.isnan(grid)]))) if not np.all(np.isnan(grid)) else 10)
+        # Compute the colour scale from monthly columns only (0-11).
+        # Including the Total column (12) skews abs_max far too high (e.g. 143% annual
+        # return) which compresses every monthly value toward yellow and makes negative
+        # months look green instead of red.
+        monthly_grid = grid[:, :12]
+        abs_max = max(10, float(np.nanmax(np.abs(monthly_grid[~np.isnan(monthly_grid)]))) if not np.all(np.isnan(monthly_grid)) else 10)
         norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
         nan_color = t['axes_facecolor']
         cmap_copy = plt.cm.get_cmap('RdYlGn').copy()
