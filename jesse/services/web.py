@@ -185,6 +185,10 @@ class DeleteCandlesRequestJson(BaseModel):
     symbol: str
 
 
+class PurgeCandlesRequestJson(BaseModel):
+    exchanges: List[str]
+
+
 class UpdateOptimizationSessionStateRequestJson(BaseModel):
     id: str
     state: dict
